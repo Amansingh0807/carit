@@ -1,0 +1,393 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Solarpunk Cyber-Eco Fonts ===== */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Oxanium:wght@400;500;600;700;800&family=Share+Tech+Mono&display=swap');
+
+/* ===== Core Custom Properties ===== */
+@layer base {
+  :root {
+    --color-bg-primary: #030704;
+    --color-bg-secondary: #08110b;
+    --color-bg-card: rgba(8, 17, 11, 0.72);
+    --color-border: rgba(16, 185, 129, 0.15);
+    --color-text-primary: #f2f7f4;
+    --color-text-secondary: #879f90;
+    
+    /* Neon Organic Accent Palette */
+    --color-accent-mint: #00ff9d;
+    --color-accent-emerald: #10b981;
+    --color-accent-glow: rgba(0, 255, 157, 0.18);
+    
+    /* Category accents */
+    --color-transport: #00d2ff;
+    --color-energy: #ffd200;
+    --color-food: #00ff88;
+    --color-shopping: #ff007f;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'Outfit', system-ui, sans-serif;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Distinctive Display Headers */
+  h1, h2, h3, h4, .font-display {
+    font-family: 'Oxanium', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  /* Monospace figures and codes */
+  .font-mono {
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* Accessible focus indicators */
+  *:focus-visible {
+    outline: 2px solid var(--color-accent-mint);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+
+/* ===== 3D Animated Grid Background Overlay ===== */
+.perspective-grid {
+  position: absolute;
+  width: 200%;
+  height: 160%;
+  top: -30%;
+  left: -50%;
+  background-image: 
+    linear-gradient(rgba(16, 185, 129, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.05) 1px, transparent 1px);
+  background-size: 55px 55px;
+  transform: perspective(600px) rotateX(55deg) translateY(0);
+  animation: grid-scroll 24s linear infinite;
+  mask-image: radial-gradient(ellipse at 50% 50%, black, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black, transparent 72%);
+  pointer-events: none;
+  opacity: 0.35;
+  z-index: 0;
+}
+
+@keyframes grid-scroll {
+  0% {
+    transform: perspective(600px) rotateX(55deg) translateY(0);
+  }
+  100% {
+    transform: perspective(600px) rotateX(55deg) translateY(55px);
+  }
+}
+
+/* ===== Solarpunk Component Classes ===== */
+@layer components {
+  
+  /* 3D Glassmorphism Cards with Inset Glows */
+  .glass-card {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(16, 185, 129, 0.16);
+    box-shadow: 
+      0 12px 36px rgba(0, 0, 0, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 0 25px rgba(0, 255, 157, 0.01);
+    border-radius: 24px;
+    position: relative;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 10;
+  }
+
+  /* 3D preserve-3d layers */
+  .transform-style-3d {
+    transform-style: preserve-3d;
+  }
+
+  .depth-1 {
+    transform: translateZ(12px);
+  }
+  .depth-2 {
+    transform: translateZ(24px);
+  }
+  .depth-3 {
+    transform: translateZ(36px);
+  }
+
+  /* 3D Tactile Buttons */
+  .btn-primary {
+    @apply px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-400 
+           text-neutral-950 font-extrabold rounded-xl border border-emerald-300/20 uppercase tracking-wider text-xs;
+    font-family: 'Oxanium', sans-serif;
+    box-shadow: 
+      0 4px 0 #045a37, 
+      0 12px 24px rgba(0, 255, 157, 0.18);
+    transform: translateY(0);
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    @apply from-emerald-400 to-teal-300;
+    box-shadow: 
+      0 6px 0 #045a37, 
+      0 18px 28px rgba(0, 255, 157, 0.28);
+    transform: translateY(-2px);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    box-shadow: 
+      0 1px 0 #045a37, 
+      0 6px 12px rgba(0, 255, 157, 0.1);
+    transform: translateY(3px);
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3.5 bg-neutral-900 border border-neutral-800 
+           text-neutral-200 font-extrabold rounded-xl uppercase tracking-wider text-xs;
+    font-family: 'Oxanium', sans-serif;
+    box-shadow: 
+      0 4px 0 #121815,
+      0 10px 20px rgba(0, 0, 0, 0.5);
+    transform: translateY(0);
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-secondary:hover {
+    @apply bg-neutral-800 border-neutral-700;
+    box-shadow: 
+      0 5px 0 #121815,
+      0 15px 24px rgba(0, 0, 0, 0.6);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary:active {
+    box-shadow: 
+      0 1px 0 #121815,
+      0 6px 12px rgba(0, 0, 0, 0.4);
+    transform: translateY(3px);
+  }
+
+  /* Custom input fields with organic depth */
+  .input-field {
+    @apply w-full px-4 py-3.5 bg-neutral-950/80 border border-emerald-950/40 rounded-xl 
+           text-neutral-50 placeholder-neutral-500 font-medium
+           transition-all duration-300;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.85);
+  }
+
+  .input-field:focus {
+    @apply border-emerald-400 text-white;
+    outline: none;
+    box-shadow: 
+      inset 0 1.5px 3px rgba(0, 0, 0, 0.7),
+      0 0 20px rgba(0, 255, 157, 0.15);
+    transform: translateY(-1px);
+  }
+
+  /* Eco Badges styling */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider;
+    font-family: 'Oxanium', sans-serif;
+  }
+
+  .badge-easy {
+    @apply badge bg-sky-500/10 text-sky-400 border border-sky-500/25;
+    box-shadow: 0 0 12px rgba(0, 210, 255, 0.1);
+  }
+
+  .badge-medium {
+    @apply badge bg-yellow-500/10 text-yellow-400 border border-yellow-500/25;
+    box-shadow: 0 0 12px rgba(255, 210, 0, 0.1);
+  }
+
+  .badge-hard {
+    @apply badge bg-rose-500/10 text-rose-400 border border-rose-500/25;
+    box-shadow: 0 0 12px rgba(255, 0, 127, 0.1);
+  }
+
+  /* Category color states */
+  .category-transportation {
+    @apply bg-sky-500/10 text-sky-400 border-sky-500/25;
+  }
+
+  .category-energy {
+    @apply bg-amber-500/10 text-amber-400 border-amber-500/25;
+  }
+
+  .category-food {
+    @apply bg-emerald-500/10 text-emerald-400 border-emerald-500/25;
+  }
+
+  .category-shopping {
+    @apply bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/25;
+  }
+
+  .spinner {
+    @apply w-6 h-6 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin;
+  }
+}
+
+/* ===== Solarpunk Animations ===== */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-300 bg-clip-text text-transparent;
+    text-shadow: 0 0 45px rgba(0, 255, 157, 0.2);
+  }
+
+  /* Custom styled scrollbars */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: #030704;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(16, 185, 129, 0.18);
+    border-radius: 4px;
+    border: 2px solid #030704;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 157, 0.35);
+  }
+
+  /* Animation-delay classes */
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+  .delay-600 { animation-delay: 600ms; }
+}
+
+/* Staggered fadeInUp reveal */
+.animate-slide-up-fade {
+  animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes slideUpFade {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Neon shadows */
+.shadow-neon-mint {
+  box-shadow: 0 0 15px rgba(0, 255, 157, 0.25);
+}
+.shadow-neon-amber {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.25);
+}
+
+/* ===== 3D Medal Medallion Bases ===== */
+.medal-gradient-bronze {
+  background: radial-gradient(circle at 35% 35%, #e0a96d 0%, #b27a3c 50%, #633b0f 100%);
+  box-shadow: 
+    0 10px 24px rgba(0,0,0,0.5), 
+    0 0 15px rgba(178, 122, 60, 0.25),
+    inset 0 1.5px 0 rgba(255,255,255,0.4);
+}
+.medal-gradient-silver {
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #b8b8b8 50%, #6e6e6e 100%);
+  box-shadow: 
+    0 10px 24px rgba(0,0,0,0.5), 
+    0 0 15px rgba(184, 184, 184, 0.25),
+    inset 0 1.5px 0 rgba(255,255,255,0.55);
+}
+.medal-gradient-gold {
+  background: radial-gradient(circle at 35% 35%, #ffe680 0%, #e6b800 50%, #997a00 100%);
+  box-shadow: 
+    0 10px 24px rgba(0,0,0,0.5), 
+    0 0 15px rgba(230, 184, 0, 0.3),
+    inset 0 1.5px 0 rgba(255,255,255,0.65);
+}
+.medal-gradient-emerald {
+  background: radial-gradient(circle at 35% 35%, #46f7a6 0%, #10b981 50%, #065f46 100%);
+  box-shadow: 
+    0 10px 24px rgba(0,0,0,0.5), 
+    0 0 15px rgba(16, 185, 129, 0.35),
+    inset 0 1.5px 0 rgba(255,255,255,0.55);
+}
+
+.medal-3d {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Accessibility Modifiers */
+.large-text {
+  font-size: 112.5%;
+}
+
+.high-contrast {
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #000000;
+  --color-bg-card: #000000;
+  --color-border: #ffffff;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #ffffff;
+  --color-accent-mint: #00ff00;
+  --color-accent-emerald: #00ff00;
+}
+
+.high-contrast .glass-card {
+  border: 2px solid #ffffff !important;
+  background-color: #000000 !important;
+  box-shadow: none !important;
+}
+
+.high-contrast .input-field {
+  border: 2px solid #ffffff !important;
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+.high-contrast .btn-primary {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: none !important;
+}
+
+.high-contrast .btn-secondary {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: none !important;
+}
+
+.high-contrast *:focus-visible {
+  outline: 3px solid #00ff00 !important;
+}
