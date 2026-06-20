@@ -143,11 +143,11 @@ async function bootstrap(): Promise<void> {
         [demoUserId]
       );
     }
-    console.log('🌱 Seeded Demo User: demo@example.com / Password123!');
+    console.log('Seeded Demo User: demo@example.com / Password123!');
   }
 
   saveDatabase();
-  console.log('✅ Schema and seeds applied');
+  console.log('Schema and seeds applied');
 
   // Start auto-save for sql.js persistence
   startAutoSave();
@@ -206,22 +206,22 @@ async function bootstrap(): Promise<void> {
   if (config.nodeEnv === 'production') {
     const path = require('path');
     const clientDistPath = path.resolve(__dirname, '../../client/dist');
-    console.log(`📁 Static serving: ENABLED`);
-    console.log(`📁 Serving client assets from: ${clientDistPath}`);
+    console.log(`Static serving: ENABLED`);
+    console.log(`Serving client assets from: ${clientDistPath}`);
     
     app.use(express.static(clientDistPath));
     
     // Catch-all route to serve the React index.html for clientside routing
-    app.get('/:splat*', (_req, res) => {
+    app.get(/.*/, (_req, res) => {
       res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
         if (err) {
-          console.error('❌ Failed to serve index.html:', err);
+          console.error('Failed to serve index.html:', err);
           res.status(500).send('Frontend asset loading failed. Check server logs.');
         }
       });
     });
   } else {
-    console.log('⚠️ Static serving: DISABLED (NODE_ENV is not production)');
+    console.log('Static serving: DISABLED (NODE_ENV is not production)');
   }
 
   // ===== Error Handling =====
@@ -229,13 +229,13 @@ async function bootstrap(): Promise<void> {
 
   // ===== Start Server =====
   app.listen(config.port, () => {
-    console.log(`🚀 Server running on http://localhost:${config.port}`);
-    console.log(`📡 API available at http://localhost:${config.port}/api`);
+    console.log(`Server running on http://localhost:${config.port}`);
+    console.log(`API available at http://localhost:${config.port}/api`);
   });
 
   // ===== Graceful Shutdown =====
   const shutdown = (): void => {
-    console.log('\n🛑 Shutting down gracefully...');
+    console.log('\n Shutting down gracefully...');
     stopAutoSave();
     closeDatabase();
     process.exit(0);
@@ -246,6 +246,6 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((err) => {
-  console.error('❌ Failed to start server:', err);
+  console.error('Failed to start server:', err);
   process.exit(1);
 });
