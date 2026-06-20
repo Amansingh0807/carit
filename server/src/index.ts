@@ -201,12 +201,22 @@ async function bootstrap(): Promise<void> {
   if (config.nodeEnv === 'production') {
     const path = require('path');
     const clientDistPath = path.resolve(__dirname, '../../client/dist');
+    console.log(`📁 Static serving: ENABLED`);
+    console.log(`📁 Serving client assets from: ${clientDistPath}`);
+    
     app.use(express.static(clientDistPath));
     
     // Catch-all route to serve the React index.html for clientside routing
     app.get('*', (_req, res) => {
-      res.sendFile(path.join(clientDistPath, 'index.html'));
+      res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
+        if (err) {
+          console.error('❌ Failed to serve index.html:', err);
+          res.status(500).send('Frontend asset loading failed. Check server logs.');
+        }
+      });
     });
+  } else {
+    console.log('⚠️ Static serving: DISABLED (NODE_ENV is not production)');
   }
 
   // ===== Error Handling =====
