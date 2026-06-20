@@ -212,7 +212,7 @@ async function bootstrap(): Promise<void> {
     app.use(express.static(clientDistPath));
     
     // Catch-all route to serve the React index.html for clientside routing
-    app.get('*', (_req, res) => {
+    app.get('/:splat*', (_req, res) => {
       res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
         if (err) {
           console.error('❌ Failed to serve index.html:', err);
