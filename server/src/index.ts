@@ -23,6 +23,11 @@ import gamificationRoutes from './routes/gamificationRoutes';
 async function bootstrap(): Promise<void> {
   const config = getConfig();
 
+  // Auto-detect Render hosting to force production environment
+  if (process.env.RENDER === 'true') {
+    config.nodeEnv = 'production';
+  }
+
   console.log('🌍 Carbon Footprint Platform - Server');
   console.log(`📋 Environment: ${config.nodeEnv}`);
 
