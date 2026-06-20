@@ -1,9 +1,9 @@
+/* ===== Solarpunk Cyber-Eco Fonts ===== */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Oxanium:wght@400;500;600;700;800&family=Share+Tech+Mono&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ===== Solarpunk Cyber-Eco Fonts ===== */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Oxanium:wght@400;500;600;700;800&family=Share+Tech+Mono&display=swap');
 
 /* ===== Core Custom Properties ===== */
 @layer base {

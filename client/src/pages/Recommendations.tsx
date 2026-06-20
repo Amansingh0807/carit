@@ -29,7 +29,7 @@ export const Recommendations: React.FC = () => {
   });
 
   const renderCategoryIcon = (category: string) => {
-    const colors = {
+    const colors: Record<string, string> = {
       transportation: 'text-sky-400 border-sky-500/25 bg-sky-500/5',
       energy: 'text-amber-400 border-amber-500/25 bg-amber-500/5',
       food: 'text-emerald-400 border-emerald-500/25 bg-emerald-500/5',
