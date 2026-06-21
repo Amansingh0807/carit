@@ -8,7 +8,7 @@ export const Achievements: React.FC = () => {
   useEffect(() => {
     fetchAchievements();
     fetchStreak();
-  }, []);
+  }, [fetchAchievements, fetchStreak]);
 
   const totalBadges = achievements.earned.length + achievements.available.length;
   const percentComplete = totalBadges > 0 ? Math.round((achievements.earned.length / totalBadges) * 100) : 0;

@@ -20,7 +20,7 @@ export const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) =
 
   useEffect(() => {
     fetchStreak();
-  }, []);
+  }, [fetchStreak]);
 
   useEffect(() => {
     const root = document.documentElement;

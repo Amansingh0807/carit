@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { TiltCard } from '../components/TiltCard';
 import type { ActivityCategory, ActivityInput, Activity } from '../types';
@@ -36,26 +36,30 @@ export const Activities: React.FC = () => {
   useEffect(() => {
     fetchEmissionFactors();
     fetchActivities(1, 10, filterCategory || undefined);
-  }, [filterCategory]);
+  }, [filterCategory, fetchEmissionFactors, fetchActivities]);
 
   // Update activity types when category changes
-  const categoryFactors = emissionFactors.filter((ef) => ef.category === category);
+  const categoryFactors = useMemo(() => {
+    return emissionFactors.filter((ef) => ef.category === category);
+  }, [emissionFactors, category]);
 
   useEffect(() => {
     if (categoryFactors.length > 0) {
       setActivityType(categoryFactors[0].activity_type);
       setUnit(categoryFactors[0].unit);
     }
-  }, [category, emissionFactors]);
+  }, [categoryFactors]);
 
   // Update unit when activityType changes
-  const selectedFactor = emissionFactors.find((ef) => ef.activity_type === activityType);
+  const selectedFactor = useMemo(() => {
+    return emissionFactors.find((ef) => ef.activity_type === activityType);
+  }, [emissionFactors, activityType]);
 
   useEffect(() => {
     if (selectedFactor) {
       setUnit(selectedFactor.unit);
     }
-  }, [activityType]);
+  }, [selectedFactor]);
 
   // Live CO2 preview
   const liveCO2Preview = () => {
@@ -109,7 +113,7 @@ export const Activities: React.FC = () => {
       setValue('');
       setDescription('');
       setDate(new Date().toISOString().split('T')[0]);
-    } catch (err) {
+    } catch {
       // Handled by store
     }
   };
@@ -404,6 +408,7 @@ export const Activities: React.FC = () => {
                       onClick={() => fetchActivities(currentPage - 1, activitiesLimit, filterCategory || undefined)}
                       disabled={currentPage === 1}
                       className="px-3.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-extrabold uppercase tracking-wider rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      aria-label="Previous page"
                     >
                       Previous
                     </button>
@@ -411,6 +416,7 @@ export const Activities: React.FC = () => {
                       onClick={() => fetchActivities(currentPage + 1, activitiesLimit, filterCategory || undefined)}
                       disabled={currentPage === totalPages}
                       className="px-3.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-extrabold uppercase tracking-wider rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      aria-label="Next page"
                     >
                       Next
                     </button>

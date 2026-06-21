@@ -69,7 +69,7 @@ export const Register: React.FC = () => {
     try {
       await register({ email, username, password, confirmPassword });
       navigate('/dashboard');
-    } catch (err) {
+    } catch {
       // Error handled by store
     }
   };

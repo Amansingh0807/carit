@@ -7,7 +7,7 @@ export const PublicRoute: React.FC = () => {
 
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
   if (isLoading) {
     return (

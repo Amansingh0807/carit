@@ -36,7 +36,7 @@ export const Dashboard: React.FC = () => {
     fetchStreak();
     fetchAchievements();
     fetchRecommendations();
-  }, []);
+  }, [fetchAnalyticsSummary, fetchStreak, fetchAchievements, fetchRecommendations]);
 
   const handleRangeChange = (range: '7days' | '30days' | '1year' | 'all') => {
     setAnalyticsRange(range);

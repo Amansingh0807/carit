@@ -8,7 +8,7 @@ export const ProtectedRoute: React.FC = () => {
   useEffect(() => {
     // If we haven't loaded yet or we are checking auth
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
   if (isLoading) {
     return (

@@ -26,7 +26,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('auth_session_expired', handleSessionExpired);
     };
-  }, []);
+  }, [checkAuth]);
 
   return (
     <BrowserRouter>

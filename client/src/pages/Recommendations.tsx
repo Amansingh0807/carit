@@ -11,7 +11,7 @@ export const Recommendations: React.FC = () => {
 
   useEffect(() => {
     fetchRecommendations();
-  }, []);
+  }, [fetchRecommendations]);
 
   const handleTakeAction = (id: string, title: string) => {
     setActiveRecommendationId(id);
