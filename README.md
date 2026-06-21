@@ -116,6 +116,7 @@ carbon-footprint-platform/
 │   └── package.json
 │
 ├── server/                      # Express backend application
+│   ├── .env.example             # Template for server configuration
 │   ├── src/
 │   │   ├── config/              # Environment config (env.ts) and logger (logger.ts)
 │   │   ├── constants/           # Emission factor data with O(1) Map lookups
@@ -128,7 +129,7 @@ carbon-footprint-platform/
 │   │   ├── types/               # TypeScript type definitions
 │   │   ├── utils/               # Cache (TTL), duration parser
 │   │   ├── validators/          # Zod schemas and inferred types
-│   │   ├── __tests__/           # Jest test suites (8 files)
+│   │   ├── __tests__/           # Jest test suites (9 files)
 │   │   └── index.ts             # Server bootstrap and orchestration
 │   └── package.json
 │
@@ -155,9 +156,13 @@ npm run install:all
 
 ### 2. Environment Configuration
 
-Create a `.env` file in the `server/` directory:
+Copy the provided environment configuration template or manually create a `.env` file in the `server/` directory:
 
-```env
+```bash
+cp server/.env.example server/.env
+```
+
+Your `.env` file should contain:
 NODE_ENV=development
 PORT=3001
 JWT_ACCESS_SECRET=your-access-secret-at-least-32-chars
@@ -291,9 +296,10 @@ cd server && npm run test:watch
 | `analyticsService.test.ts` | Aggregation, filtering, precision | 6 |
 | `recommendationService.test.ts` | Personalisation, scoring, defaults | 6 |
 | `gamificationService.test.ts` | Achievements, streaks, structure | 7 |
-| `middleware.test.ts` | Auth, validation, error handling | 12 |
-| `validation.test.ts` | Zod schema parsing | 8 |
+| `middleware.test.ts` | Auth, validation, error handling | 13 |
+| `validation.test.ts` | Zod schema parsing | 9 |
 | `footprintCalculator.test.ts` | Emission factor calculations | 6 |
+| `controllerIntegration.test.ts` | Express router and controller integration tests | 23 |
 
 ### Testing Philosophy
 
