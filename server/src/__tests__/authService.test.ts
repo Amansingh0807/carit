@@ -128,11 +128,47 @@ describe('Auth Service & Connection', () => {
     const refreshed = refreshAccessToken(testRefreshToken);
     expect(refreshed.accessToken).toBeDefined();
     expect(refreshed.refreshToken).toBeDefined();
+    // Update for subsequent tests — old token is now rotated
+    testRefreshToken = refreshed.refreshToken;
   });
 
   test('should revoke refresh token', () => {
     expect(() => {
       revokeRefreshToken(testRefreshToken);
     }).not.toThrow();
+  });
+
+  // ────────────────── EDGE CASES ──────────────────
+
+  test('should throw ConflictError when username is already taken', async () => {
+    await expect(
+      registerUser('different@email.com', 'eco_user', 'Pass1234!')
+    ).rejects.toThrow(ConflictError);
+  });
+
+  test('should throw UnauthorizedError for non-existent email during login', async () => {
+    await expect(
+      loginUser('ghost@nowhere.com', 'Pass1234!')
+    ).rejects.toThrow(UnauthorizedError);
+  });
+
+  test('should throw when refreshing with an already-revoked token', () => {
+    // testRefreshToken was revoked above, so this should fail
+    expect(() => {
+      refreshAccessToken(testRefreshToken);
+    }).toThrow();
+  });
+
+  test('should return null for getUserById with non-existent user ID', () => {
+    const user = getUserById(99999);
+    expect(user).toBeNull();
+  });
+
+  test('should return correct user for valid getUserById call', () => {
+    const user = getUserById(registeredUserId);
+    expect(user).toBeDefined();
+    expect(user?.id).toBe(registeredUserId);
+    // Should NOT contain password_hash
+    expect((user as any)?.password_hash).toBeUndefined();
   });
 });
