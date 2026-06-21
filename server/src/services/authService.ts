@@ -1,28 +1,31 @@
+/**
+ * @module authService
+ * @description Authentication and authorisation service handling user registration,
+ * login, JWT token generation/verification, and refresh token lifecycle management.
+ *
+ * Security features:
+ * - bcrypt password hashing with configurable rounds
+ * - Short-lived access tokens + long-lived refresh tokens
+ * - Automatic cleanup of expired refresh tokens
+ * - Token rotation on refresh (old token revoked, new pair issued)
+ */
+
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getDatabase, saveDatabase } from '../database/connection';
 import { getConfig } from '../config/env';
+import { parseExpiryToSeconds, parseExpiryToMs } from '../utils/duration';
 import type { User, UserPublic, AuthTokens, TokenPayload } from '../types';
 
-/**
- * Parse a duration string (e.g., '15m', '7d') to seconds
- */
-function parseExpiryToSeconds(expiry: string): number {
-  const match = expiry.match(/^(\d+)([smhd])$/);
-  if (!match) return 900; // default 15 minutes
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  const multipliers: Record<string, number> = {
-    s: 1,
-    m: 60,
-    h: 3600,
-    d: 86400,
-  };
-  return value * (multipliers[unit] ?? 60);
-}
+// ────────────────────────────────────────────────────────────────────────────
+// Password Utilities
+// ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Hash a password with bcrypt
+ * Hash a plaintext password using bcrypt with the configured number of rounds.
+ *
+ * @param password - The plaintext password to hash.
+ * @returns A promise resolving to the bcrypt hash string.
  */
 export function hashPassword(password: string): Promise<string> {
   const config = getConfig();
@@ -30,14 +33,25 @@ export function hashPassword(password: string): Promise<string> {
 }
 
 /**
- * Compare a password against a hash
+ * Compare a plaintext password against a bcrypt hash.
+ *
+ * @param password - The plaintext password to verify.
+ * @param hash - The bcrypt hash to compare against.
+ * @returns A promise resolving to `true` if the password matches.
  */
 export function comparePassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// JWT Token Management
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * Generate JWT access and refresh tokens
+ * Generate a matched pair of JWT access and refresh tokens.
+ *
+ * @param payload - Token payload containing `userId` and `email`.
+ * @returns An object with `accessToken` and `refreshToken` strings.
  */
 export function generateTokens(payload: TokenPayload): AuthTokens {
   const config = getConfig();
@@ -56,7 +70,11 @@ export function generateTokens(payload: TokenPayload): AuthTokens {
 }
 
 /**
- * Verify an access token
+ * Verify and decode a JWT access token.
+ *
+ * @param token - The access token string.
+ * @returns The decoded token payload.
+ * @throws {JsonWebTokenError} If the token is invalid or expired.
  */
 export function verifyAccessToken(token: string): TokenPayload {
   const config = getConfig();
@@ -64,15 +82,26 @@ export function verifyAccessToken(token: string): TokenPayload {
 }
 
 /**
- * Verify a refresh token
+ * Verify and decode a JWT refresh token.
+ *
+ * @param token - The refresh token string.
+ * @returns The decoded token payload.
+ * @throws {JsonWebTokenError} If the token is invalid or expired.
  */
 export function verifyRefreshToken(token: string): TokenPayload {
   const config = getConfig();
   return jwt.verify(token, config.jwt.refreshSecret) as TokenPayload;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// User Data Helpers
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * Strip sensitive fields from a user record
+ * Strip sensitive fields (password_hash, updated_at) from a user record.
+ *
+ * @param user - The full user record from the database.
+ * @returns A safe-to-serialise public user object.
  */
 export function toPublicUser(user: User): UserPublic {
   return {
@@ -84,7 +113,31 @@ export function toPublicUser(user: User): UserPublic {
 }
 
 /**
- * Register a new user
+ * Parse a raw database row into a `User` object.
+ */
+function rowToUser(row: (string | number | Uint8Array | null)[]): User {
+  return {
+    id: row[0] as number,
+    email: row[1] as string,
+    username: row[2] as string,
+    password_hash: row[3] as string,
+    created_at: row[4] as string,
+    updated_at: row[5] as string,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Core Auth Operations
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Register a new user account.
+ *
+ * @param email - User's email address (must be unique).
+ * @param username - Desired username (must be unique).
+ * @param password - Plaintext password (will be hashed).
+ * @returns The new user's public profile and authentication tokens.
+ * @throws {ConflictError} If the email or username is already taken.
  */
 export async function registerUser(
   email: string,
@@ -94,19 +147,13 @@ export async function registerUser(
   const db = getDatabase();
 
   // Check for existing email
-  const existingEmail = db.exec(
-    'SELECT id FROM users WHERE email = ?',
-    [email]
-  );
+  const existingEmail = db.exec('SELECT id FROM users WHERE email = ?', [email]);
   if (existingEmail.length > 0 && existingEmail[0].values.length > 0) {
     throw new ConflictError('Email already registered');
   }
 
   // Check for existing username
-  const existingUsername = db.exec(
-    'SELECT id FROM users WHERE username = ?',
-    [username]
-  );
+  const existingUsername = db.exec('SELECT id FROM users WHERE username = ?', [username]);
   if (existingUsername.length > 0 && existingUsername[0].values.length > 0) {
     throw new ConflictError('Username already taken');
   }
@@ -130,15 +177,7 @@ export async function registerUser(
     throw new Error('Failed to create user');
   }
 
-  const row = result[0].values[0];
-  const user: User = {
-    id: row[0] as number,
-    email: row[1] as string,
-    username: row[2] as string,
-    password_hash: row[3] as string,
-    created_at: row[4] as string,
-    updated_at: row[5] as string,
-  };
+  const user = rowToUser(result[0].values[0]);
 
   // Initialize streak record
   db.run(
@@ -158,7 +197,12 @@ export async function registerUser(
 }
 
 /**
- * Login a user
+ * Authenticate a user with email and password.
+ *
+ * @param email - User's email address.
+ * @param password - Plaintext password to verify.
+ * @returns The user's public profile and new authentication tokens.
+ * @throws {UnauthorizedError} If credentials are invalid.
  */
 export async function loginUser(
   email: string,
@@ -175,15 +219,7 @@ export async function loginUser(
     throw new UnauthorizedError('Invalid email or password');
   }
 
-  const row = result[0].values[0];
-  const user: User = {
-    id: row[0] as number,
-    email: row[1] as string,
-    username: row[2] as string,
-    password_hash: row[3] as string,
-    created_at: row[4] as string,
-    updated_at: row[5] as string,
-  };
+  const user = rowToUser(result[0].values[0]);
 
   // Verify password
   const isValid = await comparePassword(password, user.password_hash);
@@ -201,10 +237,14 @@ export async function loginUser(
 }
 
 /**
- * Refresh access token using a valid refresh token
+ * Issue new access and refresh tokens using a valid refresh token.
+ * Implements token rotation — the old refresh token is revoked.
+ *
+ * @param refreshToken - The current refresh token.
+ * @returns A new pair of access and refresh tokens.
+ * @throws {UnauthorizedError} If the refresh token is invalid or revoked.
  */
 export function refreshAccessToken(refreshToken: string): AuthTokens {
-  // Verify the refresh token
   const payload = verifyRefreshToken(refreshToken);
   const db = getDatabase();
 
@@ -231,29 +271,17 @@ export function refreshAccessToken(refreshToken: string): AuthTokens {
 }
 
 /**
- * Store a refresh token in the database
+ * Persist a refresh token in the database with an expiration timestamp.
+ * Also cleans up any expired tokens for the same user.
+ *
+ * @param userId - The owning user's ID.
+ * @param token - The refresh token string to store.
  */
 function storeRefreshToken(userId: number, token: string): void {
   const db = getDatabase();
   const config = getConfig();
 
-  // Parse expiry duration (e.g., '7d' -> 7 days)
-  const expiryStr = config.jwt.refreshExpiry;
-  let expiryMs = 7 * 24 * 60 * 60 * 1000; // default 7 days
-
-  const match = expiryStr.match(/^(\d+)([smhd])$/);
-  if (match) {
-    const value = parseInt(match[1], 10);
-    const unit = match[2];
-    const multipliers: Record<string, number> = {
-      s: 1000,
-      m: 60 * 1000,
-      h: 60 * 60 * 1000,
-      d: 24 * 60 * 60 * 1000,
-    };
-    expiryMs = value * (multipliers[unit] ?? 86400000);
-  }
-
+  const expiryMs = parseExpiryToMs(config.jwt.refreshExpiry);
   const expiresAt = new Date(Date.now() + expiryMs).toISOString();
 
   db.run(
@@ -271,7 +299,9 @@ function storeRefreshToken(userId: number, token: string): void {
 }
 
 /**
- * Logout: revoke a refresh token
+ * Revoke (delete) a refresh token, effectively logging out the session.
+ *
+ * @param refreshToken - The refresh token to revoke.
  */
 export function revokeRefreshToken(refreshToken: string): void {
   const db = getDatabase();
@@ -280,7 +310,10 @@ export function revokeRefreshToken(refreshToken: string): void {
 }
 
 /**
- * Get user by ID
+ * Look up a user by their numeric ID.
+ *
+ * @param userId - The user's database ID.
+ * @returns The user's public profile, or `null` if not found.
  */
 export function getUserById(userId: number): UserPublic | null {
   const db = getDatabase();
@@ -303,8 +336,11 @@ export function getUserById(userId: number): UserPublic | null {
   };
 }
 
-// ===== Custom Error Classes =====
+// ────────────────────────────────────────────────────────────────────────────
+// Custom Error Classes
+// ────────────────────────────────────────────────────────────────────────────
 
+/** Thrown when a resource creation conflicts with existing data (HTTP 409). */
 export class ConflictError extends Error {
   public readonly statusCode = 409;
   constructor(message: string) {
@@ -313,6 +349,7 @@ export class ConflictError extends Error {
   }
 }
 
+/** Thrown when authentication or authorisation fails (HTTP 401). */
 export class UnauthorizedError extends Error {
   public readonly statusCode = 401;
   constructor(message: string) {
