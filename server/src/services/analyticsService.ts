@@ -1,14 +1,47 @@
+/**
+ * @module analyticsService
+ * @description Aggregated carbon emission analytics for user dashboards.
+ *
+ * Provides summary statistics including total CO2, category breakdowns,
+ * and daily trend data.  Results are cached for 30 seconds to reduce
+ * redundant database queries on repeated dashboard loads.
+ */
+
 import { getDatabase } from '../database/connection';
+import { analyticsCache } from '../utils/cacheInstances';
 import type { AnalyticsSummary, CategoryBreakdown, DailyTrend, ActivityCategory } from '../types';
 
 /**
- * Get comprehensive analytics summary for a user
+ * Generate a cache key for analytics queries.
+ */
+function cacheKey(userId: number, startDate?: string, endDate?: string): string {
+  return `analytics:${userId}:${startDate ?? 'all'}:${endDate ?? 'all'}`;
+}
+
+/**
+ * Get comprehensive analytics summary for a user's carbon emissions.
+ *
+ * Returns:
+ * - `total_co2_kg` — sum of all CO2 emissions in the date range
+ * - `activity_count` — number of activities logged
+ * - `category_breakdown` — per-category totals and counts
+ * - `daily_trends` — day-by-day emission totals
+ *
+ * @param userId - The user's ID.
+ * @param startDate - Optional start date filter (YYYY-MM-DD).
+ * @param endDate - Optional end date filter (YYYY-MM-DD).
+ * @returns Aggregated analytics summary.
  */
 export function getAnalyticsSummary(
   userId: number,
   startDate?: string,
   endDate?: string
 ): AnalyticsSummary {
+  // Check cache first
+  const key = cacheKey(userId, startDate, endDate);
+  const cached = analyticsCache.get(key);
+  if (cached) return cached;
+
   const db = getDatabase();
 
   const dateConditions: string[] = [];
@@ -84,10 +117,15 @@ export function getAnalyticsSummary(
       }))
     : [];
 
-  return {
+  const summary: AnalyticsSummary = {
     total_co2_kg: Math.round(totalCo2 * 1000) / 1000,
     category_breakdown: categoryBreakdown,
     daily_trends: dailyTrends,
     activity_count: activityCount,
   };
+
+  // Cache the result
+  analyticsCache.set(key, summary);
+
+  return summary;
 }

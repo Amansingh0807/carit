@@ -1,8 +1,23 @@
+/**
+ * @module activityService
+ * @description Business logic for carbon activity CRUD operations.
+ *
+ * Handles creating, reading, updating, and deleting activity log entries.
+ * Automatically calculates CO2 emissions, updates user streaks, and
+ * checks/awards achievements after each new activity.
+ */
+
 import { getDatabase, saveDatabase } from '../database/connection';
 import { calculateCO2, getEmissionFactor } from '../constants/emissionFactors';
+import { analyticsCache, recommendationCache } from '../utils/cacheInstances';
 import type { Activity, ActivityCategory } from '../types';
 import type { CreateActivityInput, ActivityQuery } from '../validators/schemas';
 
+// ────────────────────────────────────────────────────────────────────────────
+// Custom Error Classes
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Thrown when a requested resource does not exist (HTTP 404). */
 export class NotFoundError extends Error {
   public readonly statusCode = 404;
   constructor(message: string) {
@@ -11,6 +26,7 @@ export class NotFoundError extends Error {
   }
 }
 
+/** Thrown when access to a resource is denied (HTTP 403). */
 export class ForbiddenError extends Error {
   public readonly statusCode = 403;
   constructor(message: string) {
@@ -19,7 +35,29 @@ export class ForbiddenError extends Error {
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Cache — invalidated on every write operation
+// ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Invalidate all caches related to a specific user.
+ * Called after any write operation (create, update, delete).
+ */
+function invalidateUserCaches(userId: number): void {
+  analyticsCache.invalidatePrefix(`analytics:${userId}`);
+  recommendationCache.invalidatePrefix(`recommendations:${userId}`);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Row Mapping
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Map a raw sql.js result row to a typed `Activity` object.
+ *
+ * @param row - Array of column values in SELECT order.
+ * @returns A typed `Activity` object.
+ */
 function rowToActivity(row: (string | number | Uint8Array | null)[]): Activity {
   return {
     id: row[0] as number,
@@ -35,8 +73,22 @@ function rowToActivity(row: (string | number | Uint8Array | null)[]): Activity {
   };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// CRUD Operations
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * Create a new activity entry with automatic CO2 calculation
+ * Create a new activity entry with automatic CO2 calculation.
+ *
+ * Side-effects:
+ * - Updates the user's logging streak
+ * - Checks and awards any newly-earned achievements
+ * - Invalidates analytics/recommendation caches
+ *
+ * @param userId - The owning user's ID.
+ * @param input - Validated activity input data.
+ * @returns The newly created `Activity` record.
+ * @throws {Error} If the activity type is unknown.
  */
 export function createActivity(userId: number, input: CreateActivityInput): Activity {
   const db = getDatabase();
@@ -54,14 +106,24 @@ export function createActivity(userId: number, input: CreateActivityInput): Acti
     [userId, input.category, input.activity_type, input.value, unit, co2Kg, input.description ?? null, input.date]
   );
 
-  // Get the created activity
-  const result = db.exec(
-    `SELECT id, user_id, category, activity_type, value, unit, co2_kg, description, date, created_at
-     FROM activities WHERE user_id = ? ORDER BY id DESC LIMIT 1`,
-    [userId]
-  );
+  // Use last_insert_rowid() for efficient retrieval instead of ORDER BY DESC
+  const rowIdResult = db.exec('SELECT last_insert_rowid()');
+  const lastId = rowIdResult.length > 0 && rowIdResult[0].values.length > 0
+    ? rowIdResult[0].values[0][0] as number
+    : null;
 
-  if (result.length === 0 || result[0].values.length === 0) {
+  let activity: Activity;
+  if (lastId) {
+    const result = db.exec(
+      `SELECT id, user_id, category, activity_type, value, unit, co2_kg, description, date, created_at
+       FROM activities WHERE id = ?`,
+      [lastId]
+    );
+    if (result.length === 0 || result[0].values.length === 0) {
+      throw new Error('Failed to create activity');
+    }
+    activity = rowToActivity(result[0].values[0]);
+  } else {
     throw new Error('Failed to create activity');
   }
 
@@ -71,13 +133,20 @@ export function createActivity(userId: number, input: CreateActivityInput): Acti
   // Check achievements
   checkAndAwardAchievements(userId);
 
+  // Invalidate caches for this user
+  invalidateUserCaches(userId);
+
   saveDatabase();
 
-  return rowToActivity(result[0].values[0]);
+  return activity;
 }
 
 /**
- * Get activities for a user with filtering and pagination
+ * Get activities for a user with filtering and pagination.
+ *
+ * @param userId - The user's ID.
+ * @param query - Query parameters including pagination, category, and date filters.
+ * @returns An object with `activities` array and `total` count for pagination.
  */
 export function getActivities(
   userId: number,
@@ -129,7 +198,13 @@ export function getActivities(
 }
 
 /**
- * Get a single activity by ID
+ * Get a single activity by ID with ownership verification.
+ *
+ * @param activityId - The activity's database ID.
+ * @param userId - The requesting user's ID (for ownership check).
+ * @returns The matching `Activity` record.
+ * @throws {NotFoundError} If the activity does not exist.
+ * @throws {ForbiddenError} If the activity belongs to a different user.
  */
 export function getActivityById(activityId: number, userId: number): Activity {
   const db = getDatabase();
@@ -154,7 +229,15 @@ export function getActivityById(activityId: number, userId: number): Activity {
 }
 
 /**
- * Update an existing activity
+ * Update an existing activity with partial input.
+ * CO2 emissions are recalculated automatically when activity type or value changes.
+ *
+ * @param activityId - The activity's database ID.
+ * @param userId - The requesting user's ID (for ownership check).
+ * @param input - Partial update data.
+ * @returns The updated `Activity` record.
+ * @throws {NotFoundError} If the activity does not exist.
+ * @throws {ForbiddenError} If the activity belongs to a different user.
  */
 export function updateActivity(
   activityId: number,
@@ -183,13 +266,21 @@ export function updateActivity(
     [category, activityType, value, unit, co2Kg, description ?? null, date, activityId, userId]
   );
 
+  // Invalidate caches for this user
+  invalidateUserCaches(userId);
+
   saveDatabase();
 
   return getActivityById(activityId, userId);
 }
 
 /**
- * Delete an activity
+ * Delete an activity log entry.
+ *
+ * @param activityId - The activity's database ID.
+ * @param userId - The requesting user's ID (for ownership check).
+ * @throws {NotFoundError} If the activity does not exist.
+ * @throws {ForbiddenError} If the activity belongs to a different user.
  */
 export function deleteActivity(activityId: number, userId: number): void {
   // Verify ownership
@@ -197,11 +288,23 @@ export function deleteActivity(activityId: number, userId: number): void {
 
   const db = getDatabase();
   db.run('DELETE FROM activities WHERE id = ? AND user_id = ?', [activityId, userId]);
+
+  // Invalidate caches for this user
+  invalidateUserCaches(userId);
+
   saveDatabase();
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Streak Management
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * Update user streak based on activity date
+ * Update user streak based on the date of a newly logged activity.
+ * Extends the streak for consecutive days, resets it for gaps.
+ *
+ * @param userId - The user's ID.
+ * @param activityDate - The date of the new activity (YYYY-MM-DD).
  */
 function updateStreak(userId: number, activityDate: string): void {
   const db = getDatabase();
@@ -212,7 +315,6 @@ function updateStreak(userId: number, activityDate: string): void {
   );
 
   if (streakResult.length === 0 || streakResult[0].values.length === 0) {
-    // Create streak record if it doesn't exist
     db.run(
       'INSERT OR IGNORE INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date) VALUES (?, 1, 1, ?)',
       [userId, activityDate]
@@ -226,7 +328,6 @@ function updateStreak(userId: number, activityDate: string): void {
   const lastDate = row[2] as string | null;
 
   if (!lastDate) {
-    // First activity
     db.run(
       'UPDATE user_streaks SET current_streak = 1, longest_streak = 1, last_activity_date = ? WHERE user_id = ?',
       [activityDate, userId]
@@ -256,8 +357,16 @@ function updateStreak(userId: number, activityDate: string): void {
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Achievement Checking
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * Check and award achievements for a user
+ * Check and award any newly-earned achievements for a user.
+ * Uses a single batch query with CTEs to gather all stats efficiently,
+ * then evaluates each unearned achievement against the thresholds.
+ *
+ * @param userId - The user's ID to check achievements for.
  */
 function checkAndAwardAchievements(userId: number): void {
   const db = getDatabase();
@@ -274,15 +383,26 @@ function checkAndAwardAchievements(userId: number): void {
 
   if (achievementsResult.length === 0 || achievementsResult[0].values.length === 0) return;
 
-  // Get user stats
-  const totalCountResult = db.exec(
-    'SELECT COUNT(*) FROM activities WHERE user_id = ?',
-    [userId]
+  // Batch stats query using CTEs for efficiency (single DB round-trip)
+  const statsResult = db.exec(
+    `WITH 
+       total AS (SELECT COUNT(*) as cnt FROM activities WHERE user_id = ?),
+       by_cat AS (SELECT category, COUNT(*) as cnt FROM activities WHERE user_id = ? GROUP BY category),
+       streak AS (SELECT current_streak FROM user_streaks WHERE user_id = ?)
+     SELECT 
+       (SELECT cnt FROM total) as total_count,
+       (SELECT current_streak FROM streak) as streak_val`,
+    [userId, userId, userId]
   );
-  const totalCount = totalCountResult.length > 0 && totalCountResult[0].values.length > 0
-    ? totalCountResult[0].values[0][0] as number
+
+  const totalCount = statsResult.length > 0 && statsResult[0].values.length > 0
+    ? (statsResult[0].values[0][0] as number) ?? 0
+    : 0;
+  const currentStreak = statsResult.length > 0 && statsResult[0].values.length > 0
+    ? (statsResult[0].values[0][1] as number) ?? 0
     : 0;
 
+  // Get category counts
   const categoryCounts = new Map<string, number>();
   const catCountResult = db.exec(
     'SELECT category, COUNT(*) FROM activities WHERE user_id = ? GROUP BY category',
@@ -293,15 +413,6 @@ function checkAndAwardAchievements(userId: number): void {
       categoryCounts.set(row[0] as string, row[1] as number);
     }
   }
-
-  // Get streak
-  const streakResult = db.exec(
-    'SELECT current_streak FROM user_streaks WHERE user_id = ?',
-    [userId]
-  );
-  const currentStreak = streakResult.length > 0 && streakResult[0].values.length > 0
-    ? streakResult[0].values[0][0] as number
-    : 0;
 
   // Check each unearned achievement
   for (const row of achievementsResult[0].values) {

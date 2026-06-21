@@ -1,8 +1,23 @@
+/**
+ * @module gamificationService
+ * @description Service layer for gamification features including achievement
+ * tracking and user streak management.
+ *
+ * Provides read-only access to a user's earned/available achievements
+ * and their current logging streak statistics.
+ */
+
 import { getDatabase } from '../database/connection';
 import type { Achievement, UserAchievement, UserStreak } from '../types';
 
 /**
- * Get all achievements with user's earned status
+ * Get all achievements categorised into earned and available for a specific user.
+ *
+ * Earned achievements include the full achievement details and the date they
+ * were unlocked.  Available achievements are ordered by threshold (easiest first).
+ *
+ * @param userId - The user's database ID.
+ * @returns An object with `earned` and `available` achievement arrays.
  */
 export function getUserAchievements(userId: number): {
   earned: UserAchievement[];
@@ -10,7 +25,7 @@ export function getUserAchievements(userId: number): {
 } {
   const db = getDatabase();
 
-  // Get earned achievements
+  // Get earned achievements with joined details
   const earnedResult = db.exec(
     `SELECT ua.id, ua.user_id, ua.achievement_id, ua.earned_at,
             a.id as a_id, a.name, a.description, a.icon, a.category, a.threshold, a.threshold_type
@@ -66,7 +81,13 @@ export function getUserAchievements(userId: number): {
 }
 
 /**
- * Get user's streak information
+ * Get a user's current streak information.
+ *
+ * Returns default zero values if no streak record exists for the user
+ * (e.g. a user who has never logged an activity).
+ *
+ * @param userId - The user's database ID.
+ * @returns The user's `UserStreak` record.
  */
 export function getUserStreak(userId: number): UserStreak {
   const db = getDatabase();

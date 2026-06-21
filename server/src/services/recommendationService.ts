@@ -1,6 +1,26 @@
+/**
+ * @module recommendationService
+ * @description Rule-based recommendation engine for personalised carbon reduction strategies.
+ *
+ * Analyses a user's activity patterns (highest-emitting categories and types)
+ * and generates ranked, actionable suggestions.  Results are cached per user
+ * with a 60-second TTL, invalidated automatically when new activities are logged.
+ *
+ * Scoring algorithm:
+ * 1. Each rule has a `baseSavingsKg` and a trigger condition.
+ * 2. Applicable rules are scored: `savingsKg * difficultyMultiplier`.
+ * 3. Results are sorted by score (highest impact first) and capped at 8.
+ */
+
 import { getDatabase } from '../database/connection';
+import { recommendationCache } from '../utils/cacheInstances';
 import type { Recommendation, ActivityCategory, DifficultyLevel } from '../types';
 
+// ────────────────────────────────────────────────────────────────────────────
+// Types
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Internal rule definition for the recommendation engine. */
 interface RecommendationRule {
   id: string;
   title: string;
@@ -16,12 +36,15 @@ interface RecommendationRule {
   };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Rule Definitions
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * Rule-based recommendation engine.
- * Analyzes user's highest-emitting categories and generates
- * ranked, personalized reduction strategies.
+ * Complete set of recommendation rules organised by category.
+ * Each rule defines a trigger condition and a base CO2 savings estimate.
  */
-const RECOMMENDATION_RULES: RecommendationRule[] = [
+const RECOMMENDATION_RULES: ReadonlyArray<RecommendationRule> = [
   // ===== Transportation =====
   {
     id: 'trans-bike-commute',
@@ -30,17 +53,17 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'transportation',
     difficulty: 'easy',
     baseSavingsKg: 1.05,
-    icon: '🚲',
+    icon: 'bike',
     trigger: { activityTypes: ['car'], minCount: 3 },
   },
   {
     id: 'trans-public-transit',
     title: 'Use public transit instead of driving',
-    description: 'Buses emit 58% less CO₂ per km than cars, and trains emit 80% less. Plan your commute around public transit routes.',
+    description: 'Buses emit 58% less CO2 per km than cars, and trains emit 80% less. Plan your commute around public transit routes.',
     category: 'transportation',
     difficulty: 'easy',
     baseSavingsKg: 2.4,
-    icon: '🚌',
+    icon: 'bus',
     trigger: { activityTypes: ['car'], minCount: 5 },
   },
   {
@@ -50,27 +73,27 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'transportation',
     difficulty: 'medium',
     baseSavingsKg: 3.2,
-    icon: '🚗',
+    icon: 'car-share',
     trigger: { activityTypes: ['car'], minCo2Kg: 20 },
   },
   {
     id: 'trans-ev-switch',
     title: 'Consider switching to an electric vehicle',
-    description: 'EVs produce 75% less CO₂ than petrol cars over their lifetime. Many countries offer purchase incentives.',
+    description: 'EVs produce 75% less CO2 than petrol cars over their lifetime. Many countries offer purchase incentives.',
     category: 'transportation',
     difficulty: 'hard',
     baseSavingsKg: 15.0,
-    icon: '⚡',
+    icon: 'bolt',
     trigger: { activityTypes: ['car'], minCo2Kg: 50 },
   },
   {
     id: 'trans-reduce-flights',
     title: 'Replace short flights with train travel',
-    description: 'A train journey produces up to 80% less CO₂ than the equivalent flight. Consider rail for trips under 500km.',
+    description: 'A train journey produces up to 80% less CO2 than the equivalent flight. Consider rail for trips under 500km.',
     category: 'transportation',
     difficulty: 'medium',
     baseSavingsKg: 40.0,
-    icon: '🚄',
+    icon: 'train',
     trigger: { activityTypes: ['flight_domestic', 'flight_international'], minCount: 1 },
   },
 
@@ -82,17 +105,17 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'energy',
     difficulty: 'easy',
     baseSavingsKg: 5.0,
-    icon: '💡',
+    icon: 'lightbulb',
     trigger: { activityTypes: ['electricity'], minCo2Kg: 10 },
   },
   {
     id: 'energy-thermostat',
-    title: 'Lower your thermostat by 2°C',
-    description: 'Reducing heating by just 2°C can cut your heating bill by 10% and significantly reduce natural gas consumption.',
+    title: 'Lower your thermostat by 2 degrees C',
+    description: 'Reducing heating by just 2 degrees C can cut your heating bill by 10% and significantly reduce natural gas consumption.',
     category: 'energy',
     difficulty: 'easy',
     baseSavingsKg: 8.0,
-    icon: '🌡️',
+    icon: 'thermometer',
     trigger: { activityTypes: ['natural_gas', 'heating_oil'], minCount: 1 },
   },
   {
@@ -102,7 +125,7 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'energy',
     difficulty: 'hard',
     baseSavingsKg: 50.0,
-    icon: '☀️',
+    icon: 'sun',
     trigger: { activityTypes: ['electricity'], minCo2Kg: 30 },
   },
   {
@@ -112,7 +135,7 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'energy',
     difficulty: 'easy',
     baseSavingsKg: 3.0,
-    icon: '🔌',
+    icon: 'plug',
     trigger: { activityTypes: ['electricity'], minCount: 2 },
   },
 
@@ -120,11 +143,11 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
   {
     id: 'food-meatless-monday',
     title: 'Start Meatless Mondays',
-    description: 'Replacing beef with plant-based meals one day per week can save over 100kg CO₂ per year. Start with just one day!',
+    description: 'Replacing beef with plant-based meals one day per week can save over 100kg CO2 per year. Start with just one day!',
     category: 'food',
     difficulty: 'easy',
     baseSavingsKg: 2.5,
-    icon: '🥗',
+    icon: 'salad',
     trigger: { activityTypes: ['beef'], minCount: 1 },
   },
   {
@@ -134,7 +157,7 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'food',
     difficulty: 'medium',
     baseSavingsKg: 13.5,
-    icon: '🌱',
+    icon: 'leaf',
     trigger: { activityTypes: ['beef'], minCo2Kg: 10 },
   },
   {
@@ -144,7 +167,7 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'food',
     difficulty: 'hard',
     baseSavingsKg: 25.0,
-    icon: '🌿',
+    icon: 'sprout',
     trigger: { activityTypes: ['beef', 'pork', 'chicken'], minCo2Kg: 20 },
   },
   {
@@ -154,7 +177,7 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'food',
     difficulty: 'easy',
     baseSavingsKg: 2.0,
-    icon: '🏪',
+    icon: 'store',
     trigger: { activityTypes: ['vegetables', 'fruits'], minCount: 3 },
   },
 
@@ -162,31 +185,31 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
   {
     id: 'shop-secondhand',
     title: 'Buy secondhand when possible',
-    description: 'Secondhand items produce 97% less CO₂ than new ones. Thrift stores, online marketplaces, and swap events are great sources.',
+    description: 'Secondhand items produce 97% less CO2 than new ones. Thrift stores, online marketplaces, and swap events are great sources.',
     category: 'shopping',
     difficulty: 'easy',
     baseSavingsKg: 14.5,
-    icon: '♻️',
+    icon: 'recycle',
     trigger: { activityTypes: ['clothing', 'electronics', 'furniture'], minCount: 2 },
   },
   {
     id: 'shop-reduce-fast-fashion',
     title: 'Reduce fast fashion purchases',
-    description: 'Each clothing item produces ~15kg CO₂. Build a capsule wardrobe with quality pieces that last years instead of months.',
+    description: 'Each clothing item produces ~15kg CO2. Build a capsule wardrobe with quality pieces that last years instead of months.',
     category: 'shopping',
     difficulty: 'medium',
     baseSavingsKg: 12.0,
-    icon: '👕',
+    icon: 'shirt',
     trigger: { activityTypes: ['clothing'], minCount: 3 },
   },
   {
     id: 'shop-repair-reuse',
     title: 'Repair electronics instead of replacing',
-    description: 'Manufacturing a new phone produces ~70kg CO₂. Extending device life by 1 year can reduce its carbon footprint by 25%.',
+    description: 'Manufacturing a new phone produces ~70kg CO2. Extending device life by 1 year can reduce its carbon footprint by 25%.',
     category: 'shopping',
     difficulty: 'medium',
     baseSavingsKg: 25.0,
-    icon: '🔧',
+    icon: 'wrench',
     trigger: { activityTypes: ['electronics'], minCount: 1 },
   },
   {
@@ -196,15 +219,54 @@ const RECOMMENDATION_RULES: RecommendationRule[] = [
     category: 'shopping',
     difficulty: 'easy',
     baseSavingsKg: 3.0,
-    icon: '📦',
+    icon: 'package',
     trigger: { activityTypes: ['packaging'], minCount: 5 },
   },
 ];
 
+// ────────────────────────────────────────────────────────────────────────────
+// Scoring Helpers
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * Generate personalized recommendations based on user's activity patterns
+ * Difficulty multiplier — easier actions get higher scores to encourage adoption.
+ *
+ * @param difficulty - The difficulty level of the recommendation.
+ * @returns Numeric multiplier for scoring.
+ */
+function getDifficultyMultiplier(difficulty: DifficultyLevel): number {
+  const multipliers: Record<DifficultyLevel, number> = {
+    easy: 1.5,
+    medium: 1.0,
+    hard: 0.7,
+  };
+  return multipliers[difficulty];
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Public API
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate personalised recommendations based on a user's activity patterns.
+ *
+ * Algorithm:
+ * 1. Fetch user's activity summary grouped by type.
+ * 2. Evaluate each rule's trigger against the user's data.
+ * 3. Score applicable rules by `savingsKg * difficultyMultiplier`.
+ * 4. Return the top 8 recommendations sorted by impact score.
+ *
+ * For new users with no activities, returns a set of general starter tips.
+ *
+ * @param userId - The user's ID.
+ * @returns Array of up to 8 personalised `Recommendation` objects.
  */
 export function getRecommendations(userId: number): Recommendation[] {
+  // Check cache
+  const cacheKey = `recommendations:${userId}`;
+  const cached = recommendationCache.get(cacheKey);
+  if (cached) return cached;
+
   const db = getDatabase();
 
   // Get user's activity summary by type
@@ -217,11 +279,12 @@ export function getRecommendations(userId: number): Recommendation[] {
   );
 
   if (activitySummary.length === 0 || activitySummary[0].values.length === 0) {
-    // Return general tips for new users
-    return getDefaultRecommendations();
+    const defaults = getDefaultRecommendations();
+    recommendationCache.set(cacheKey, defaults);
+    return defaults;
   }
 
-  // Build lookup maps
+  // Build lookup maps for O(1) access
   const typeCounts = new Map<string, number>();
   const typeCo2 = new Map<string, number>();
 
@@ -258,7 +321,6 @@ export function getRecommendations(userId: number): Recommendation[] {
     }
 
     if (applicable) {
-      // Score based on potential impact relative to user's emissions
       const savingsKg = Math.min(rule.baseSavingsKg, relevantCo2 * 0.5);
       const score = savingsKg * getDifficultyMultiplier(rule.difficulty);
       scored.push({ rule, score, savingsKg });
@@ -268,7 +330,7 @@ export function getRecommendations(userId: number): Recommendation[] {
   // Sort by score (highest impact first) and return top recommendations
   scored.sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, 8).map(({ rule, savingsKg }) => ({
+  const results = scored.slice(0, 8).map(({ rule, savingsKg }) => ({
     id: rule.id,
     title: rule.title,
     description: rule.description,
@@ -277,16 +339,19 @@ export function getRecommendations(userId: number): Recommendation[] {
     potential_savings_kg: Math.round(savingsKg * 100) / 100,
     icon: rule.icon,
   }));
+
+  // Cache results
+  recommendationCache.set(cacheKey, results);
+
+  return results;
 }
 
-function getDifficultyMultiplier(difficulty: DifficultyLevel): number {
-  switch (difficulty) {
-    case 'easy': return 1.5;
-    case 'medium': return 1.0;
-    case 'hard': return 0.7;
-  }
-}
-
+/**
+ * Default recommendations for users with no activity history.
+ * Provides general eco-friendly tips to encourage first-time logging.
+ *
+ * @returns Array of 3 general-purpose `Recommendation` objects.
+ */
 function getDefaultRecommendations(): Recommendation[] {
   return [
     {
@@ -296,7 +361,7 @@ function getDefaultRecommendations(): Recommendation[] {
       category: 'transportation',
       difficulty: 'easy',
       potential_savings_kg: 0,
-      icon: '📝',
+      icon: 'clipboard',
     },
     {
       id: 'default-walk-more',
@@ -305,7 +370,7 @@ function getDefaultRecommendations(): Recommendation[] {
       category: 'transportation',
       difficulty: 'easy',
       potential_savings_kg: 1.0,
-      icon: '🚶',
+      icon: 'footprints',
     },
     {
       id: 'default-reduce-waste',
@@ -314,7 +379,7 @@ function getDefaultRecommendations(): Recommendation[] {
       category: 'food',
       difficulty: 'easy',
       potential_savings_kg: 2.0,
-      icon: '🍽️',
+      icon: 'utensils',
     },
   ];
 }
