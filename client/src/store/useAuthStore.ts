@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import axios from 'axios';
 import api, { setStoredTokens, clearStoredTokens, getStoredTokens } from '../services/api';
 import type { User, LoginCredentials, RegisterCredentials, ApiResponse } from '../types';
 
@@ -34,11 +35,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       } else {
         set({ isLoading: false, error: response.data.message ?? 'Login failed' });
       }
-    } catch (err: any) {
-      const errors = err.response?.data?.errors;
-      const message = errors && Array.isArray(errors)
-        ? errors.join(', ')
-        : (err.response?.data?.message ?? 'Invalid email or password');
+    } catch (err) {
+      let message = 'Invalid email or password';
+      if (axios.isAxiosError(err)) {
+        const errors = err.response?.data?.errors;
+        message = errors && Array.isArray(errors)
+          ? errors.join(', ')
+          : (err.response?.data?.message ?? message);
+      }
       set({ isLoading: false, error: message });
       throw err;
     }
@@ -58,11 +62,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       } else {
         set({ isLoading: false, error: response.data.message ?? 'Registration failed' });
       }
-    } catch (err: any) {
-      const errors = err.response?.data?.errors;
-      const message = errors && Array.isArray(errors)
-        ? errors.join(', ')
-        : (err.response?.data?.message ?? 'Email or username already exists');
+    } catch (err) {
+      let message = 'Email or username already exists';
+      if (axios.isAxiosError(err)) {
+        const errors = err.response?.data?.errors;
+        message = errors && Array.isArray(errors)
+          ? errors.join(', ')
+          : (err.response?.data?.message ?? message);
+      }
       set({ isLoading: false, error: message });
       throw err;
     }
@@ -98,7 +105,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         clearStoredTokens();
         set({ user: null, isAuthenticated: false, isLoading: false });
       }
-    } catch (err) {
+    } catch {
       clearStoredTokens();
       set({ user: null, isAuthenticated: false, isLoading: false });
     }

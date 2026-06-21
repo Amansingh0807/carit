@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import axios from 'axios';
 import api from '../services/api';
 import type {
   Activity,
@@ -10,6 +11,7 @@ import type {
   UserStreak,
   ApiResponse,
   PaginatedResponse,
+  Achievement,
 } from '../types';
 
 interface AppState {
@@ -30,7 +32,7 @@ interface AppState {
   recommendations: Recommendation[];
   recommendationsLoading: boolean;
 
-  achievements: { earned: UserAchievement[]; available: any[] };
+  achievements: { earned: UserAchievement[]; available: Achievement[] };
   achievementsLoading: boolean;
 
   streak: UserStreak | null;
@@ -96,8 +98,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ activityLoading: false, activityError: response.data.message ?? 'Failed to load activities' });
       }
-    } catch (err: any) {
-      set({ activityLoading: false, activityError: err.response?.data?.message ?? 'Failed to load activities' });
+    } catch (err) {
+      let message = 'Failed to load activities';
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message ?? message;
+      }
+      set({ activityLoading: false, activityError: message });
     }
   },
 
@@ -116,8 +122,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ activityLoading: false, activityError: response.data.message ?? 'Failed to log activity' });
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.message ?? 'Failed to log activity';
+    } catch (err) {
+      let msg = 'Failed to log activity';
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.message ?? msg;
+      }
       set({ activityLoading: false, activityError: msg });
       throw err;
     }
@@ -137,8 +146,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ activityLoading: false, activityError: response.data.message ?? 'Failed to update activity' });
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.message ?? 'Failed to update activity';
+    } catch (err) {
+      let msg = 'Failed to update activity';
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.message ?? msg;
+      }
       set({ activityLoading: false, activityError: msg });
       throw err;
     }
@@ -159,8 +171,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ activityLoading: false, activityError: response.data.message ?? 'Failed to delete activity' });
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.message ?? 'Failed to delete activity';
+    } catch (err) {
+      let msg = 'Failed to delete activity';
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.message ?? msg;
+      }
       set({ activityLoading: false, activityError: msg });
       throw err;
     }
@@ -179,7 +194,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ emissionFactorsLoading: false });
       }
-    } catch (err) {
+    } catch {
       set({ emissionFactorsLoading: false });
     }
   },
@@ -210,7 +225,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ analyticsLoading: false });
       }
-    } catch (err) {
+    } catch {
       set({ analyticsLoading: false });
     }
   },
@@ -224,7 +239,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ recommendationsLoading: false });
       }
-    } catch (err) {
+    } catch {
       set({ recommendationsLoading: false });
     }
   },
@@ -232,13 +247,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   fetchAchievements: async () => {
     set({ achievementsLoading: true });
     try {
-      const response = await api.get<ApiResponse<{ earned: UserAchievement[]; available: any[] }>>('/api/gamification/achievements');
+      const response = await api.get<ApiResponse<{ earned: UserAchievement[]; available: Achievement[] }>>('/api/gamification/achievements');
       if (response.data.success && response.data.data) {
         set({ achievements: response.data.data, achievementsLoading: false });
       } else {
         set({ achievementsLoading: false });
       }
-    } catch (err) {
+    } catch {
       set({ achievementsLoading: false });
     }
   },
@@ -252,7 +267,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ streakLoading: false });
       }
-    } catch (err) {
+    } catch {
       set({ streakLoading: false });
     }
   },
